@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Claire Map — 3D Terrain</title>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <link href="./styles.css" rel="stylesheet">
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="panel">
+      <div class="panel-header">
+        <div class="panel-row">
+          <label for="basemap" class="bm-label">Basemap</label>
+          <select id="basemap" class="bm-select">
+            <option value="https://api.mapbox.com/styles/v1/evandapplegate/cmc57d3ek01be01r707gw42z0?access_token=pk.eyJ1IjoiZXZhbmRhcHBsZWdhdGUiLCJhIjoiY2tmbzA1cWM1MWozeTM4cXV4eHUwMzFhdiJ9.Z5f9p8jJD_N1MQwycF2NEw" selected>Cali Terrain</option>
+            <option value="https://api.mapbox.com/styles/v1/mapbox/outdoors-v12?access_token=pk.eyJ1IjoiZXZhbmRhcHBsZWdhdGUiLCJhIjoiY2tmbzA1cWM1MWozeTM4cXV4eHUwMzFhdiJ9.Z5f9p8jJD_N1MQwycF2NEw">Outdoors</option>
+            <option value="https://api.mapbox.com/styles/v1/mapbox/satellite-v9?access_token=pk.eyJ1IjoiZXZhbmRhcHBsZWdhdGUiLCJhIjoiY2tmbzA1cWM1MWozeTM4cXV4eHUwMzFhdiJ9.Z5f9p8jJD_N1MQwycF2NEw">Satellite</option>
+            <option value="https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12?access_token=pk.eyJ1IjoiZXZhbmRhcHBsZWdhdGUiLCJhIjoiY2tmbzA1cWM1MWozeTM4cXV4eHUwMzFhdiJ9.Z5f9p8jJD_N1MQwycF2NEw">Satellite Streets</option>
+            <option value="https://api.mapbox.com/styles/v1/mapbox/light-v11?access_token=pk.eyJ1IjoiZXZhbmRhcHBsZWdhdGUiLCJhIjoiY2tmbzA1cWM1MWozeTM4cXV4eHUwMzFhdiJ9.Z5f9p8jJD_N1MQwycF2NEw">Light</option>
+            <option value="https://api.mapbox.com/styles/v1/mapbox/dark-v11?access_token=pk.eyJ1IjoiZXZhbmRhcHBsZWdhdGUiLCJhIjoiY2tmbzA1cWM1MWozeTM4cXV4eHUwMzFhdiJ9.Z5f9p8jJD_N1MQwycF2NEw">Dark</option>
+          </select>
+        </div>
+        <div class="panel-title">Layers</div>
+      </div>
+      <div id="layers" class="layers-list"></div>
+      <div class="panel-footer">
+        <span class="hint">Tip: toggle "Steepness" to see shaded relief</span>
+      </div>
+    </div>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <script src="./app.js"></script>
+  </body>
+  </html>
+
+

@@ -1,0 +1,17 @@
+{
+"type": "FeatureCollection",
+"name": "points",
+"features": [
+{ "type": "Feature", "properties": { "Name": "Parking" }, "geometry": { "type": "Point", "coordinates": [ -73.2760147, 42.4193113 ] } },
+{ "type": "Feature", "properties": { "Name": "Overlook" }, "geometry": { "type": "Point", "coordinates": [ -73.2891133, 42.4078594 ] } },
+{ "type": "Feature", "properties": { "Name": "Yokun Seat" }, "geometry": { "type": "Point", "coordinates": [ -73.3063052, 42.4013505 ] } },
+{ "type": "Feature", "properties": { "Name": "Lenox Mountain Summit" }, "geometry": { "type": "Point", "coordinates": [ -73.3110771, 42.393388 ] } },
+{ "type": "Feature", "properties": { "Name": "Parking" }, "geometry": { "type": "Point", "coordinates": [ -73.2986935, 42.3825652 ] } },
+{ "type": "Feature", "properties": { "Name": "Parking" }, "geometry": { "type": "Point", "coordinates": [ -73.2771088, 42.3797559 ] } },
+{ "type": "Feature", "properties": { "Name": "Parking" }, "geometry": { "type": "Point", "coordinates": [ -73.2856944, 42.357636 ] } },
+{ "type": "Feature", "properties": { "Name": "Parking" }, "geometry": { "type": "Point", "coordinates": [ -73.2849725, 42.3565898 ] } },
+{ "type": "Feature", "properties": { "Name": "Parking" }, "geometry": { "type": "Point", "coordinates": [ -73.3252215, 42.3507289 ] } },
+{ "type": "Feature", "properties": { "Name": "Olivia's overlook" }, "geometry": { "type": "Point", "coordinates": [ -73.3376254, 42.3519244 ] } },
+{ "type": "Feature", "properties": { "Name": "Overlook" }, "geometry": { "type": "Point", "coordinates": [ -73.3434833, 42.3475445 ] } }
+]
+}

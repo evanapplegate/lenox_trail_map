@@ -1,0 +1,7 @@
+# Track only the static site in docs/
+*
+!.gitignore
+!docs/
+!docs/**
+
+
