@@ -30,7 +30,7 @@ const layerConfigs = [
   { id: 'poi', file: 'POI.geojson' },
   { id: 'parcels', file: 'parcels.geojson', linePaint: { 'line-color': '#bc9d7e', 'line-width': 1 } },
   { id: 'easements', file: 'easements.geojson', fillPaint: { 'fill-color': '#f4b6c2', 'fill-opacity': 0.35 } },
-  { id: 'contours', file: '1400_ft_contour.geojson', linePaint: { 'line-color': '#000000', 'line-width': 1, 'line-dasharray': [0, 1.5] }, lineLayout: { 'line-cap': 'round' } }
+  { id: 'contours', file: '1400_ft_contour.geojson', linePaint: { 'line-color': '#000000', 'line-width': 1, 'line-dasharray': [2, 3] }, lineLayout: { 'line-cap': 'round' } }
 ];
 
 function detectLabelKey(props) {
@@ -78,6 +78,50 @@ function extendBoundsFromFeatureCollection(bounds, featureCollection) {
     }
   }
   return extended;
+}
+
+function ensureParcelHighlightLayer() {
+  if (!map.getSource('parcels')) return;
+  if (!map.getLayer('parcels-highlight')) {
+    const beforeId = map.getLayer('parcels-label') ? 'parcels-label' : (map.getLayer('parcels-line') ? 'parcels-line' : undefined);
+    const layerDef = {
+      id: 'parcels-highlight',
+      type: 'fill',
+      source: 'parcels',
+      layout: { visibility: 'none' },
+      paint: { 'fill-color': '#bc9d7e', 'fill-opacity': 0.3 }
+    };
+    try {
+      if (beforeId) map.addLayer(layerDef, beforeId);
+      else map.addLayer(layerDef);
+    } catch (_) {
+      try { map.addLayer(layerDef); } catch (_) {}
+    }
+  }
+}
+
+function showParcelHighlight(mapParId) {
+  ensureParcelHighlightLayer();
+  if (!map.getLayer('parcels-highlight')) return;
+  map.setFilter('parcels-highlight', ['==', ['get', 'MAP_PAR_ID'], mapParId]);
+  map.setLayoutProperty('parcels-highlight', 'visibility', 'visible');
+  if (!map.__clearParcelHighlight) {
+    map.__clearParcelHighlight = (e) => {
+      const feats = map.queryRenderedFeatures(e.point, { layers: ['parcels-hit'] });
+      if (!feats.length) {
+        hideParcelHighlight();
+        map.off('click', map.__clearParcelHighlight);
+        map.__clearParcelHighlight = null;
+      }
+    };
+    map.on('click', map.__clearParcelHighlight);
+  }
+}
+
+function hideParcelHighlight() {
+  if (map.getLayer('parcels-highlight')) {
+    map.setLayoutProperty('parcels-highlight', 'visibility', 'none');
+  }
 }
 
 let steepnessDesiredVisible = true;
@@ -244,6 +288,10 @@ async function initializeOverlays(opts = { autoFit: false }) {
         console.log('[initializeOverlays] added parcels-hit');
       }
 
+      if (cfg.id === 'parcels') {
+        ensureParcelHighlightLayer();
+      }
+
       // Parcels: label shows owner name, toggled with line
       if (cfg.id === 'parcels' && !map.getLayer('parcels-label')) {
         map.addLayer({
@@ -252,7 +300,7 @@ async function initializeOverlays(opts = { autoFit: false }) {
           source: cfg.id,
           layout: {
             'text-field': ['coalesce', ['get', 'parcel_owners_Owner Name'], ''],
-            'text-size': 12,
+            'text-size': 10,
             'text-allow-overlap': false,
             'text-font': ['Open Sans Bold','Arial Unicode MS Bold']
           },
@@ -279,10 +327,12 @@ async function initializeOverlays(opts = { autoFit: false }) {
 
   // Parcels popup
   if (!map.__parcelsClickBound) {
-    map.on('click', 'parcels-hit', (e) => {
+    map.__parcelPopupHandler = (e) => {
       const f = e.features && e.features[0];
       if (!f) return;
       const p = f.properties || {};
+      // Highlight this parcel
+      if (p['MAP_PAR_ID']) showParcelHighlight(p['MAP_PAR_ID']);
       const html = `
         <div>
           <table>
@@ -296,7 +346,8 @@ async function initializeOverlays(opts = { autoFit: false }) {
         .setHTML(html)
         .addTo(map);
       console.log('[popup] parcels shown at', e.lngLat);
-    });
+    };
+    map.on('click', 'parcels-hit', map.__parcelPopupHandler);
     map.__parcelsClickBound = true;
   }
 
@@ -318,6 +369,8 @@ map.on('load', () => {
       applySteepnessExaggeration();
     });
   }
+
+  setupMeasuring();
 });
 map.on('style.load', () => {
   console.log('[event] style load');
@@ -419,6 +472,164 @@ function buildToggles() {
     }
     panel.append(row);
   }
+
+  // Append measuring UI after Steepness row
+  const measRow = document.createElement('div');
+  measRow.className = 'layer-row';
+  const btn = document.createElement('button');
+  btn.id = 'measureToggle';
+  btn.className = 'btn';
+  btn.textContent = 'Measure distance';
+  const readout = document.createElement('span');
+  readout.id = 'measureReadout';
+  readout.className = 'hint';
+  readout.style.marginLeft = 'auto';
+  const clear = document.createElement('button');
+  clear.id = 'measureClear';
+  clear.className = 'btn btn-ghost';
+  clear.textContent = 'Clear';
+  clear.style.display = 'none';
+  measRow.append(btn, readout, clear);
+  panel.append(measRow);
+  // Wire up measuring tool for dynamically created buttons
+  setupMeasuring();
+}
+
+// --- Measuring tool (terrain-aware) ---
+let measureActive = false;
+let measurePoints = [];
+function setupMeasuring() {
+  const btn = document.getElementById('measureToggle');
+  const clearBtn = document.getElementById('measureClear');
+  const readout = document.getElementById('measureReadout');
+  if (!btn) return;
+
+  const ensureMeasureLayers = () => {
+    if (!map.getSource('measure-line')) {
+      map.addSource('measure-line', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    }
+    if (!map.getLayer('measure-line')) {
+      map.addLayer({ id: 'measure-line', type: 'line', source: 'measure-line', paint: { 'line-color': '#204992', 'line-width': 2, 'line-dasharray': [2,1] } });
+    }
+    if (!map.getSource('measure-points')) {
+      map.addSource('measure-points', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    }
+    if (!map.getLayer('measure-points')) {
+      map.addLayer({ id: 'measure-points', type: 'circle', source: 'measure-points', paint: { 'circle-radius': 4, 'circle-color': '#204992', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } });
+    }
+  };
+
+  const updateGeojson = () => {
+    const line = { type: 'Feature', geometry: { type: 'LineString', coordinates: measurePoints }, properties: {} };
+    const pts = measurePoints.map(c => ({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: {} }));
+    const lineCol = { type: 'FeatureCollection', features: measurePoints.length >= 2 ? [line] : [] };
+    const ptsCol = { type: 'FeatureCollection', features: pts };
+    map.getSource('measure-line')?.setData(lineCol);
+    map.getSource('measure-points')?.setData(ptsCol);
+  };
+
+  const densify = (coords, metersPerStep = 30) => {
+    const out = [];
+    for (let i = 0; i < coords.length - 1; i++) {
+      const a = coords[i], b = coords[i+1];
+      out.push(a);
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      // Approx meters per degree at mid-lat
+      const lat = (a[1] + b[1]) / 2;
+      const mPerDegLat = 111320;
+      const mPerDegLng = Math.cos(lat * Math.PI/180) * 111320;
+      const distM = Math.hypot(dx * mPerDegLng, dy * mPerDegLat);
+      const steps = Math.max(0, Math.floor(distM / metersPerStep) - 1);
+      for (let s = 1; s <= steps; s++) {
+        const t = s / (steps + 1);
+        out.push([a[0] + dx * t, a[1] + dy * t]);
+      }
+    }
+    out.push(coords[coords.length - 1]);
+    return out;
+  };
+
+  const calcTerrainDistance = async (coords) => {
+    if (coords.length < 2) return 0;
+    const densified = densify(coords, 25);
+    let sum = 0;
+    for (let i = 0; i < densified.length - 1; i++) {
+      const a = densified[i];
+      const b = densified[i+1];
+      const elevA = map.queryTerrainElevation({ lng: a[0], lat: a[1] }) || 0;
+      const elevB = map.queryTerrainElevation({ lng: b[0], lat: b[1] }) || 0;
+      const lat = (a[1] + b[1]) / 2;
+      const mPerDegLat = 111320;
+      const mPerDegLng = Math.cos(lat * Math.PI/180) * 111320;
+      const dxM = (b[0] - a[0]) * mPerDegLng;
+      const dyM = (b[1] - a[1]) * mPerDegLat;
+      const dzM = elevB - elevA;
+      sum += Math.hypot(dxM, dyM, dzM);
+    }
+    return sum;
+  };
+
+  const refreshReadout = async () => {
+    if (!readout) return;
+    const m = await calcTerrainDistance(measurePoints);
+    const miles = m / 1609.344;
+    readout.textContent = `${miles.toFixed(2)} mi`;
+  };
+
+  const activate = () => {
+    ensureMeasureLayers();
+    measureActive = true;
+    measurePoints = [];
+    updateGeojson();
+    refreshReadout();
+    btn.textContent = 'Measuring… (click to add)';
+    if (clearBtn) clearBtn.style.display = '';
+    map.getCanvas().style.cursor = 'crosshair';
+    map.on('click', onClick);
+    map.on('dblclick', onDblClick);
+    map.on('contextmenu', onFinish);
+    // Temporarily disable parcel popup while measuring
+    map.__suspendedParcelClick = (e) => {
+      e.preventDefault();
+      e.originalEvent && (e.originalEvent.cancelBubble = true);
+      return false;
+    };
+    map.on('click', 'parcels-hit', map.__suspendedParcelClick);
+  };
+  const deactivate = () => {
+    measureActive = false;
+    btn.textContent = 'Measure distance';
+    map.getCanvas().style.cursor = '';
+    map.off('click', onClick);
+    map.off('dblclick', onDblClick);
+    map.off('contextmenu', onFinish);
+    if (map.__suspendedParcelClick) {
+      map.off('click', 'parcels-hit', map.__suspendedParcelClick);
+      map.__suspendedParcelClick = null;
+    }
+  };
+  const onClick = async (e) => {
+    measurePoints.push([e.lngLat.lng, e.lngLat.lat]);
+    updateGeojson();
+    await refreshReadout();
+  };
+  const onDblClick = (e) => {
+    e.preventDefault();
+    onFinish();
+  };
+  const onFinish = () => {
+    deactivate();
+  };
+
+  btn.addEventListener('click', () => {
+    if (measureActive) deactivate(); else activate();
+  });
+  clearBtn?.addEventListener('click', () => {
+    measurePoints = [];
+    updateGeojson();
+    refreshReadout();
+  });
 }
 
 
