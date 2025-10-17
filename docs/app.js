@@ -11,10 +11,10 @@ console.log('[init] booting map');
 const map = new mapboxgl.Map({
   container: 'map',
   style: initialStyle,
-  center: [-73.285, 42.36],
-  zoom: 12.2,
-  pitch: 60,
-  bearing: 20,
+  center: [-73.31708, 42.36243],
+  zoom: 11.81,
+  pitch: 0,
+  bearing: 0,
   hash: true
 });
 
