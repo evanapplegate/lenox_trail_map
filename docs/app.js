@@ -106,6 +106,7 @@ async function initializeOverlays(opts = { autoFit: false }) {
       source: 'mapbox-dem',
       layout: { visibility: steepnessDesiredVisible ? 'visible' : 'none' },
       paint: {
+        'hillshade-exaggeration': 0.85,
         'hillshade-shadow-color': '#3b2f2f',
         'hillshade-highlight-color': '#fff9f0',
         'hillshade-accent-color': '#d7c7b9'
@@ -172,7 +173,6 @@ async function initializeOverlays(opts = { autoFit: false }) {
       }
 
       if (cfg.id === 'poi') {
-        await ensureParkingIcon(map);
         if (!map.getLayer('poi-parking')) {
           map.addLayer({
             id: 'poi-parking',
@@ -180,8 +180,8 @@ async function initializeOverlays(opts = { autoFit: false }) {
             source: cfg.id,
             filter: ['==', ['get', 'Name'], 'Parking'],
             layout: {
-              'icon-image': 'parking-icon',
-              'icon-size': 0.9,
+              'icon-image': ['coalesce', ['image', 'parking-15'], ['image', 'parking'], ['image', 'marker-15']],
+              'icon-size': 1.0,
               'icon-allow-overlap': true
             }
           });
