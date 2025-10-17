@@ -39,6 +39,7 @@ html, body {
   margin-top: 8px;
   color: #666;
 }
+.panel-footer input[type="range"] { flex: 1; }
 
 .layers-list {
   display: flex;
@@ -51,6 +52,23 @@ html, body {
   align-items: center;
   gap: 6px;
   padding: 2px 0;
+}
+
+.legend-swatch {
+  width: 28px;
+  height: 10px;
+  display: inline-block;
+  margin: 0 6px 0 2px;
+}
+
+.layer-row .steepness-slider {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.layer-row .steepness-slider input[type="range"] {
+  width: 120px;
 }
 
 .hint {
