@@ -77,4 +77,78 @@ html, body {
   font-size: 12px;
 }
 
+/* --- User Points --- */
+#user-points-section { margin-top: 6px; border-top: 1px solid #ddd; padding-top: 6px; }
+#addPointBtn { width: 100%; margin: 4px 0; }
+#addPointBtn.placing { background: #204992; color: #fff; border-color: #204992; }
+
+#user-points-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-point-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.user-point-item:hover { background: rgba(0,0,0,0.06); }
+
+.point-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.15);
+}
+
+.point-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.point-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.point-action {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: center;
+  opacity: 0.5;
+  position: relative;
+}
+.point-action:hover { opacity: 1; background: rgba(0,0,0,0.08); }
+
+/* Hidden color input inside the color-change button */
+.point-action input[type="color"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
 

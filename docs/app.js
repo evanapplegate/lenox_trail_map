@@ -24,8 +24,8 @@ map.addControl(new mapboxgl.ScaleControl({ maxWidth: 200, unit: 'imperial' }));
 // Data layer configuration mapped to docs/data/*.geojson
 const layerConfigs = [
   { id: 'trails', file: 'trails.geojson', linePaint: { 'line-color': '#57914e', 'line-width': 1.5 } },
-  { id: 'sidewalks', file: 'extant_sidewalks.geojson', linePaint: { 'line-color': '#6f6f6f', 'line-width': 2 } },
-  { id: 'proposed_sidewalks', file: 'proposed_sidewalks.geojson', linePaint: { 'line-color': '#444', 'line-width': 2, 'line-dasharray': [1, 1] } },
+  { id: 'sidewalks', file: 'extant_sidewalks.geojson', linePaint: { 'line-color': '#ff6600', 'line-width': 4 } },
+  { id: 'proposed_sidewalks', file: 'proposed_sidewalks.geojson', linePaint: { 'line-color': '#ff6600', 'line-width': 4, 'line-dasharray': [1, 1] } },
   { id: 'proposed_paths', file: 'proposed_shared_use_paths.geojson', linePaint: { 'line-color': '#a15a00', 'line-width': 2, 'line-dasharray': [2, 1] } },
   { id: 'poi', file: 'POI.geojson' },
   { id: 'parcels', file: 'parcels.geojson', linePaint: { 'line-color': '#bc9d7e', 'line-width': 1 } },
@@ -403,8 +403,8 @@ function buildToggles() {
     { id: 'parcels-line', label: 'Parcels', coupled: ['parcels-label'], swatch: { type: 'fill', color: '#f8efe7', border: '#bc9d7e' } },
     { id: 'easements-fill', label: 'Easements', swatch: { type: 'fill', color: '#f4b6c2' } },
     { id: 'trails-line', label: 'Trails', coupled: ['trails-name'], swatch: { type: 'line', color: '#1b7f3a', width: 3 } },
-    { id: 'sidewalks-line', label: 'Existing sidewalks', swatch: { type: 'line', color: '#6f6f6f', width: 2 } },
-    { id: 'proposed_sidewalks-line', label: 'Proposed sidewalks', swatch: { type: 'line', color: '#444', width: 2, dash: [4, 4] } },
+    { id: 'sidewalks-line', label: 'Existing sidewalks', swatch: { type: 'line', color: '#ff6600', width: 4 } },
+    { id: 'proposed_sidewalks-line', label: 'Proposed sidewalks', swatch: { type: 'line', color: '#ff6600', width: 4, dash: [4, 4] } },
     { id: 'proposed_paths-line', label: 'Proposed shared-use paths', swatch: { type: 'line', color: '#a15a00', width: 3, dash: [6, 3] } },
     { id: 'contours-line', label: '1,400 ft. contour line', swatch: { type: 'line', color: '#000000', width: 3, dash: [0, 6] } },
     { id: 'steepness', label: 'Steepness', swatch: { type: 'fill', color: 'linear-gradient(90deg,#fff9f0,#d7c7b9,#3b2f2f)' } }
@@ -631,5 +631,248 @@ function setupMeasuring() {
     refreshReadout();
   });
 }
+
+// --- User Points (add / rename / recolor / delete) ---
+// Lightweight in-page prompt (returns Promise<string|null>)
+function inlinePrompt(message, defaultValue) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('inline-prompt-overlay');
+    const msg = document.getElementById('inline-prompt-msg');
+    const input = document.getElementById('inline-prompt-input');
+    const okBtn = document.getElementById('inline-prompt-ok');
+    const cancelBtn = document.getElementById('inline-prompt-cancel');
+    msg.textContent = message;
+    input.value = defaultValue || '';
+    overlay.style.display = 'flex';
+    input.focus();
+    input.select();
+    const cleanup = (val) => { overlay.style.display = 'none'; off(); resolve(val); };
+    const onOk = () => cleanup(input.value);
+    const onCancel = () => cleanup(null);
+    const onKey = (e) => { if (e.key === 'Enter') onOk(); else if (e.key === 'Escape') onCancel(); };
+    const off = () => { okBtn.removeEventListener('click', onOk); cancelBtn.removeEventListener('click', onCancel); input.removeEventListener('keydown', onKey); };
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    input.addEventListener('keydown', onKey);
+  });
+}
+
+const USER_POINTS_KEY = 'claire_map_user_points';
+// Set this to your deployed Worker URL, e.g. 'https://claire-pins.<you>.workers.dev'
+// Leave empty string to use localStorage only.
+const PINS_API = 'https://claire-pins.evanapplegate.workers.dev';
+let userPoints = []; // { id, lng, lat, label, color, marker }
+let addPointActive = false;
+
+function serializePoints() {
+  return userPoints.map(p => ({ id: p.id, lng: p.lng, lat: p.lat, label: p.label, color: p.color }));
+}
+
+function saveUserPoints() {
+  const data = serializePoints();
+  // Always keep localStorage as cache
+  try { localStorage.setItem(USER_POINTS_KEY, JSON.stringify(data)); } catch (_) {}
+  // Push to remote if configured
+  if (PINS_API) {
+    fetch(`${PINS_API}/pins`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(r => {
+      if (!r.ok) console.warn('[userPoints] remote save failed', r.status);
+      else console.log('[userPoints] remote saved', data.length);
+    }).catch(e => console.warn('[userPoints] remote save error', e));
+  }
+  console.log('[userPoints] saved', data.length);
+}
+
+function materializePoints(data) {
+  // Remove existing markers
+  for (const p of userPoints) p.marker && p.marker.remove();
+  userPoints = [];
+  for (const p of data) {
+    const pt = { id: p.id, lng: p.lng, lat: p.lat, label: p.label, color: p.color, marker: null };
+    pt.marker = createColoredMarker(p.color, pt).setLngLat([p.lng, p.lat]).addTo(map);
+    userPoints.push(pt);
+  }
+  renderPointsList();
+}
+
+async function loadUserPoints() {
+  // Try remote first, fall back to localStorage
+  if (PINS_API) {
+    try {
+      const r = await fetch(`${PINS_API}/pins`);
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data)) {
+          console.log('[userPoints] loaded from remote', data.length);
+          materializePoints(data);
+          // Update local cache
+          try { localStorage.setItem(USER_POINTS_KEY, JSON.stringify(data)); } catch (_) {}
+          return;
+        }
+      }
+    } catch (e) { console.warn('[userPoints] remote load failed, falling back', e); }
+  }
+  // Fallback: localStorage
+  try {
+    const raw = localStorage.getItem(USER_POINTS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return;
+    console.log('[userPoints] loaded from localStorage', data.length);
+    materializePoints(data);
+  } catch (e) { console.warn('[userPoints] load failed', e); }
+}
+
+function createColoredMarker(color, pt) {
+  const el = document.createElement('div');
+  el.style.cssText = `width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer;`;
+  // Click on marker shows popup and blocks parcel popup underneath
+  el.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    if (!pt) return;
+    const html = `<div><table>
+      <tr><th style="text-align:left;padding-right:8px;">Point</th><td>${pt.label}</td></tr>
+      <tr><th style="text-align:left;padding-right:8px;">Lat</th><td>${pt.lat.toFixed(5)}</td></tr>
+      <tr><th style="text-align:left;padding-right:8px;">Lng</th><td>${pt.lng.toFixed(5)}</td></tr>
+    </table></div>`;
+    new mapboxgl.Popup({ closeOnClick: true })
+      .setLngLat([pt.lng, pt.lat])
+      .setHTML(html)
+      .addTo(map);
+  });
+  return new mapboxgl.Marker({ element: el, anchor: 'center' });
+}
+
+function renderPointsList() {
+  const list = document.getElementById('user-points-list');
+  if (!list) return;
+  list.innerHTML = '';
+  for (const pt of userPoints) {
+    const li = document.createElement('li');
+    li.className = 'user-point-item';
+
+    // color dot
+    const dot = document.createElement('span');
+    dot.className = 'point-color-dot';
+    dot.style.background = pt.color;
+
+    // label
+    const lbl = document.createElement('span');
+    lbl.className = 'point-label';
+    lbl.textContent = pt.label;
+
+    // click row -> fly to
+    const flyHandler = () => {
+      map.flyTo({ center: [pt.lng, pt.lat], zoom: Math.max(map.getZoom(), 15), duration: 800 });
+    };
+    dot.addEventListener('click', flyHandler);
+    lbl.addEventListener('click', flyHandler);
+
+    // actions
+    const acts = document.createElement('span');
+    acts.className = 'point-actions';
+
+    // color picker button
+    const colorBtn = document.createElement('button');
+    colorBtn.className = 'point-action';
+    colorBtn.title = 'Change color';
+    colorBtn.textContent = '\u{1F3A8}'; // palette emoji as icon
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = pt.color;
+    colorInput.addEventListener('input', (e) => {
+      pt.color = e.target.value;
+      dot.style.background = pt.color;
+      // rebuild marker with new color
+      pt.marker.remove();
+      pt.marker = createColoredMarker(pt.color, pt).setLngLat([pt.lng, pt.lat]).addTo(map);
+      saveUserPoints();
+    });
+    colorBtn.appendChild(colorInput);
+
+    // rename button
+    const renameBtn = document.createElement('button');
+    renameBtn.className = 'point-action';
+    renameBtn.title = 'Rename';
+    renameBtn.innerHTML = '&#9998;'; // pencil
+    renameBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const newName = await inlinePrompt('Rename point:', pt.label);
+      if (newName !== null && newName.trim()) {
+        pt.label = newName.trim();
+        lbl.textContent = pt.label;
+        saveUserPoints();
+      }
+    });
+
+    // delete button
+    const delBtn = document.createElement('button');
+    delBtn.className = 'point-action';
+    delBtn.title = 'Delete';
+    delBtn.innerHTML = '&#128465;'; // trash can
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pt.marker.remove();
+      userPoints = userPoints.filter(x => x.id !== pt.id);
+      saveUserPoints();
+      renderPointsList();
+    });
+
+    acts.append(colorBtn, renameBtn, delBtn);
+    li.append(dot, lbl, acts);
+    list.appendChild(li);
+  }
+}
+
+function setupAddPoint() {
+  const btn = document.getElementById('addPointBtn');
+  if (!btn) return;
+
+  const onMapClick = async (e) => {
+    // Exit placing mode
+    addPointActive = false;
+    btn.classList.remove('placing');
+    btn.textContent = '+ Add Point';
+    map.getCanvas().style.cursor = '';
+
+    const label = await inlinePrompt('Label for this point:');
+    if (label === null || !label.trim()) return; // cancelled
+
+    const color = '#e04040';
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const pt = { id, lng: e.lngLat.lng, lat: e.lngLat.lat, label: label.trim(), color, marker: null };
+    pt.marker = createColoredMarker(color, pt).setLngLat(e.lngLat).addTo(map);
+    userPoints.push(pt);
+    saveUserPoints();
+    renderPointsList();
+    console.log('[userPoints] added', pt.label, pt.lng, pt.lat);
+  };
+
+  btn.addEventListener('click', () => {
+    if (addPointActive) {
+      // cancel
+      addPointActive = false;
+      btn.classList.remove('placing');
+      btn.textContent = '+ Add Point';
+      map.getCanvas().style.cursor = '';
+      map.off('click', onMapClick);
+    } else {
+      addPointActive = true;
+      btn.classList.add('placing');
+      btn.textContent = 'Click map to place…';
+      map.getCanvas().style.cursor = 'crosshair';
+      map.once('click', onMapClick);
+    }
+  });
+}
+
+// Boot user-points after map loads
+map.on('load', () => {
+  loadUserPoints();
+  setupAddPoint();
+});
 
 

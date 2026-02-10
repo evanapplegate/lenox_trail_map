@@ -24,9 +24,26 @@
         <div class="panel-title">Layers</div>
       </div>
       <div id="layers" class="layers-list"></div>
+      <div id="user-points-section">
+        <div class="panel-title" style="margin-top:8px;">My Points</div>
+        <button id="addPointBtn" class="btn">+ Add Point</button>
+        <ul id="user-points-list"></ul>
+      </div>
       <div class="panel-footer">
         <span class="hint">Toggle "Steepness" to see terrain shading.</span>
         <span class="hint">For 3D view on mobile two-finger drag up and down, for 3D view with a mouse drag around with the scroll wheel button, for 3D view with a trackpad use two-finger click-and-drag.</span>
+      </div>
+    </div>
+
+    <!-- lightweight inline prompt dialog -->
+    <div id="inline-prompt-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9999;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:8px;padding:16px 20px;box-shadow:0 4px 20px rgba(0,0,0,0.25);min-width:260px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;">
+        <div id="inline-prompt-msg" style="margin-bottom:8px;font-weight:500;"></div>
+        <input id="inline-prompt-input" type="text" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #bbb;border-radius:4px;font-size:14px;">
+        <div style="margin-top:10px;display:flex;justify-content:flex-end;gap:8px;">
+          <button id="inline-prompt-cancel" style="padding:4px 12px;border:1px solid #bbb;border-radius:4px;background:#fff;cursor:pointer;">Cancel</button>
+          <button id="inline-prompt-ok" style="padding:4px 12px;border:none;border-radius:4px;background:#204992;color:#fff;cursor:pointer;">OK</button>
+        </div>
       </div>
     </div>
 
