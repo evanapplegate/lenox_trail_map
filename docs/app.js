@@ -30,7 +30,10 @@ const layerConfigs = [
   { id: 'poi', file: 'POI.geojson' },
   { id: 'parcels', file: 'parcels.geojson', linePaint: { 'line-color': '#bc9d7e', 'line-width': 1 } },
   { id: 'easements', file: 'easements.geojson', fillPaint: { 'fill-color': '#f4b6c2', 'fill-opacity': 0.35 } },
-  { id: 'contours', file: '1400_ft_contour.geojson', linePaint: { 'line-color': '#000000', 'line-width': 1, 'line-dasharray': [2, 3] }, lineLayout: { 'line-cap': 'round' } }
+  { id: 'contours', file: '1400_ft_contour.geojson', linePaint: { 'line-color': '#000000', 'line-width': 1, 'line-dasharray': [2, 3] }, lineLayout: { 'line-cap': 'round' } },
+  { id: 'sewer', file: 'sewer.geojson', linePaint: { 'line-color': '#8B4513', 'line-width': 1.5 } },
+  { id: 'towns', file: 'towns.geojson', linePaint: { 'line-color': '#000000', 'line-width': 1, 'line-dasharray': [8, 3] }, lineLayout: { 'line-cap': 'round' }, labelKey: 'TOWN' },
+  { id: 'crosswalk', point: true }
 ];
 
 function detectLabelKey(props) {
@@ -50,6 +53,21 @@ async function ensureParkingIcon(map) {
     const bitmap = await createImageBitmap(blob);
     map.addImage('parking-icon', bitmap, { sdf: false });
     parkingIconAdded = true;
+  } catch (e) {
+    // silently ignore if icon can't be loaded
+  }
+}
+
+let crosswalkIconAdded = false;
+async function ensureCrosswalkIcon(map) {
+  if (map.hasImage && map.hasImage('crosswalk-icon')) return;
+  if (crosswalkIconAdded) return;
+  try {
+    const img = new Image(27, 27);
+    img.src = './icons/crosswalk.svg?' + Date.now();
+    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
+    map.addImage('crosswalk-icon', img, { sdf: false });
+    crosswalkIconAdded = true;
   } catch (e) {
     // silently ignore if icon can't be loaded
   }
@@ -213,8 +231,40 @@ async function initializeOverlays(opts = { autoFit: false }) {
   const bounds = new mapboxgl.LngLatBounds();
   let haveBounds = false;
   for (const cfg of layerConfigs) {
-    const url = `./data/${cfg.file}`;
     try {
+      // Crosswalk: inline point, no file to fetch
+      if (cfg.id === 'crosswalk') {
+        await ensureCrosswalkIcon(map);
+        if (!map.getSource('crosswalk')) {
+          map.addSource('crosswalk', {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: [{
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [-73.31172385354843, 42.352516309045846] },
+                properties: { Name: 'Crosswalk' }
+              }]
+            }
+          });
+        }
+        if (!map.getLayer('crosswalk-symbol')) {
+          map.addLayer({
+            id: 'crosswalk-symbol',
+            type: 'symbol',
+            source: 'crosswalk',
+            layout: {
+              'icon-image': 'crosswalk-icon',
+              'icon-size': 0.75,
+              'icon-allow-overlap': true
+            }
+          });
+          console.log('[initializeOverlays] crosswalk-symbol added');
+        }
+        continue;
+      }
+
+      const url = `./data/${cfg.file}`;
       const sample = await fetch(url).then(r => {
         if (!r.ok) throw new Error(`Missing ${url}`);
         return r.json();
@@ -312,6 +362,32 @@ async function initializeOverlays(opts = { autoFit: false }) {
         });
         console.log('[initializeOverlays] added parcels-label');
       }
+
+      // Towns: repeating labels along polygon border, offset inward
+      if (cfg.id === 'towns' && !map.getLayer('towns-label')) {
+        map.addLayer({
+          id: 'towns-label',
+          type: 'symbol',
+          source: cfg.id,
+          layout: {
+            'symbol-placement': 'line',
+            'symbol-spacing': 200,
+            'text-field': ['coalesce', ['get', 'TOWN'], ''],
+            'text-size': 12,
+            'text-font': ['Open Sans Bold','Arial Unicode MS Bold'],
+            'text-rotation-alignment': 'map',
+            'text-keep-upright': true,
+            'text-offset': [0, 1],
+            'text-allow-overlap': false
+          },
+          paint: {
+            'text-color': '#333333',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 1
+          }
+        });
+        console.log('[initializeOverlays] added towns-label');
+      }
     } catch (err) {
       // skip if data missing
       console.log('[initializeOverlays] skip', cfg.id, err && err.message);
@@ -374,6 +450,7 @@ map.on('load', () => {
 });
 map.on('style.load', () => {
   console.log('[event] style load');
+  crosswalkIconAdded = false;
   initializeOverlays({ autoFit: false });
 });
 
@@ -407,6 +484,9 @@ function buildToggles() {
     { id: 'proposed_sidewalks-line', label: 'Proposed sidewalks', swatch: { type: 'line', color: '#ff6600', width: 4, dash: [4, 4] } },
     { id: 'proposed_paths-line', label: 'Proposed shared-use paths', swatch: { type: 'line', color: '#a15a00', width: 3, dash: [6, 3] } },
     { id: 'contours-line', label: '1,400 ft. contour line', swatch: { type: 'line', color: '#000000', width: 3, dash: [0, 6] } },
+    { id: 'sewer-line', label: 'Sewer', swatch: { type: 'line', color: '#8B4513', width: 3 } },
+    { id: 'towns-line', label: 'Towns', coupled: ['towns-label'], swatch: { type: 'line', color: '#000000', width: 3, dash: [6, 3] } },
+    { id: 'crosswalk-symbol', label: 'Crosswalk', swatch: { type: 'icon', src: './icons/crosswalk.svg' } },
     { id: 'steepness', label: 'Steepness', swatch: { type: 'fill', color: 'linear-gradient(90deg,#fff9f0,#d7c7b9,#3b2f2f)' } }
   ];
 
@@ -416,7 +496,7 @@ function buildToggles() {
   };
 
   for (const { id, label, coupled = [], swatch } of items) {
-    if (!map.getLayer(id) && id !== 'steepness') continue;
+    if (!map.getLayer(id) && id !== 'steepness' && id !== 'crosswalk-symbol') continue;
     const row = document.createElement('label');
     row.className = 'layer-row';
     const cb = document.createElement('input');
@@ -445,6 +525,16 @@ function buildToggles() {
       } else if (swatch.type === 'line') {
         sw.style.background = 'transparent';
         sw.style.borderBottom = `${swatch.width || 2}px ${swatch.dash ? 'dashed' : 'solid'} ${swatch.color}`;
+      } else if (swatch.type === 'icon') {
+        const img = document.createElement('img');
+        img.src = swatch.src;
+        img.style.cssText = 'width:14px;height:14px;';
+        sw.style.background = 'transparent';
+        sw.style.border = 'none';
+        sw.style.display = 'inline-flex';
+        sw.style.alignItems = 'center';
+        sw.style.justifyContent = 'center';
+        sw.appendChild(img);
       }
       row.append(cb, sw, text);
     } else {
